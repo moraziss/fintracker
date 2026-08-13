@@ -1,0 +1,30 @@
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main/main
+url-shortener
+
+# Тесты
+*.test
+*.out
+coverage.*
+
+# Go workspace (если не используешь — не мешает)
+go.work
+go.work.sum
+go.mod
+go.sum
+test-api.http
+
+# Секреты/конфиги
+.env
+*.local.yaml
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
