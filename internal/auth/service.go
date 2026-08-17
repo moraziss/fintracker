@@ -5,18 +5,22 @@ import (
 	"errors"
 	"time"
 
-	"github.com/morazss/fintracker/internal/user"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/morazss/fintracker/internal/db"
+	"github.com/morazss/fintracker/internal/user"
 )
 
 type Service struct {
 	users         user.Repository
 	tokens        *TokenIssuer
 	refreshTokens RefreshTokenRepository
+	beginner      db.Beginner
 }
 
-func NewService(users user.Repository, tokens *TokenIssuer, refreshTokens RefreshTokenRepository) *Service {
-	return &Service{users: users, tokens: tokens, refreshTokens: refreshTokens}
+func NewService(users user.Repository, tokens *TokenIssuer, refreshTokens RefreshTokenRepository, beginner db.Beginner) *Service {
+	return &Service{users: users, tokens: tokens, refreshTokens: refreshTokens, beginner: beginner}
 }
 
 func (s *Service) Login(ctx context.Context, email, password string) (*TokenPair, error) {
@@ -32,7 +36,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*TokenPair
 		return nil, ErrInvalidCredentials
 	}
 
-	return s.issueTokenPair(ctx, u.ID)
+	return s.issueTokenPair(ctx, s.refreshTokens, u.ID)
 }
 
 func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*TokenPair, error) {
@@ -50,14 +54,36 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*TokenPa
 		return nil, ErrInvalidCredentials
 	}
 
-	if err := s.refreshTokens.Revoke(ctx, stored.ID); err != nil {
+	// Revoke старого + Create нового — одна DB-транзакция: либо оба эффекта
+	// применяются, либо ни один. pgx.BeginFunc сам коммитит при nil и
+	// откатывает при любой ошибке из fn.
+	var pair *TokenPair
+	err = pgx.BeginFunc(ctx, s.beginner, func(tx pgx.Tx) error {
+		txRepo := s.refreshTokens.WithTx(tx)
+
+		if err := txRepo.Revoke(ctx, stored.ID); err != nil {
+			return err
+		}
+
+		newPair, err := s.issueTokenPair(ctx, txRepo, stored.UserID)
+		if err != nil {
+			return err
+		}
+		pair = newPair
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	return s.issueTokenPair(ctx, stored.UserID)
+	return pair, nil
 }
 
-func (s *Service) issueTokenPair(ctx context.Context, userID int64) (*TokenPair, error) {
+// issueTokenPair теперь принимает репозиторий параметром, а не берёт s.refreshTokens
+// напрямую: Login вызывает его вне транзакции (там нечего откатывать — только один
+// Create), Refresh — с tx-scoped репозиторием, чтобы Create попал в ту же транзакцию,
+// что и Revoke чуть выше.
+func (s *Service) issueTokenPair(ctx context.Context, refreshTokens RefreshTokenRepository, userID int64) (*TokenPair, error) {
 	accessToken, err := s.tokens.GenerateAccessToken(userID)
 	if err != nil {
 		return nil, err
@@ -68,7 +94,7 @@ func (s *Service) issueTokenPair(ctx context.Context, userID int64) (*TokenPair,
 		return nil, err
 	}
 
-	_, err = s.refreshTokens.Create(ctx, userID, hashRefreshToken(rawRefresh), time.Now().Add(RefreshTokenTTL))
+	_, err = refreshTokens.Create(ctx, userID, hashRefreshToken(rawRefresh), time.Now().Add(RefreshTokenTTL))
 	if err != nil {
 		return nil, err
 	}

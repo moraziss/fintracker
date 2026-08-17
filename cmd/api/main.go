@@ -6,16 +6,29 @@ import (
 	"net/http"
 	"os"
 
+	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/morazss/fintracker/internal/auth"
 
+	"github.com/morazss/fintracker/internal/account"
+	"github.com/morazss/fintracker/internal/auth"
+	"github.com/morazss/fintracker/internal/transaction"
 	"github.com/morazss/fintracker/internal/user"
 )
 
 func main() {
 	ctx := context.Background()
 
-	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("invalid DATABASE_URL: %v", err)
+	}
+	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		pgxdecimal.Register(conn.TypeMap())
+		return nil
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		log.Fatalf("unable to create connection pool: %v", err)
 	}
@@ -28,9 +41,13 @@ func main() {
 	userHandler := user.NewHandler(userService)
 
 	refreshTokenRepo := auth.NewPostgresRefreshTokenRepository(pool)
-
-	authService := auth.NewService(userRepo, tokenIssuer, refreshTokenRepo)
+	authService := auth.NewService(userRepo, tokenIssuer, refreshTokenRepo, pool)
 	authHandler := auth.NewHandler(authService)
+
+	accountRepo := account.NewPostgresRepository(pool)
+	transactionRepo := transaction.NewPostgresRepository(pool)
+	transactionService := transaction.NewService(transactionRepo, accountRepo, pool)
+	transactionHandler := transaction.NewHandler(transactionService)
 
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("POST /auth/register", userHandler.Register)
@@ -38,7 +55,7 @@ func main() {
 	publicMux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 
 	protectedMux := http.NewServeMux()
-	// с Недели 3 сюда просто добавляются новые маршруты — уже под защитой
+	protectedMux.HandleFunc("POST /transactions", transactionHandler.Create)
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/auth/", publicMux)

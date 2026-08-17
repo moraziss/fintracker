@@ -6,15 +6,22 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/morazss/fintracker/internal/db"
 )
 
 type PostgresRefreshTokenRepository struct {
-	pool *pgxpool.Pool
+	q db.Querier
 }
 
-func NewPostgresRefreshTokenRepository(pool *pgxpool.Pool) *PostgresRefreshTokenRepository {
-	return &PostgresRefreshTokenRepository{pool: pool}
+func NewPostgresRefreshTokenRepository(q db.Querier) *PostgresRefreshTokenRepository {
+	return &PostgresRefreshTokenRepository{q: q}
+}
+
+// WithTx — тот же конструктор, другой Querier. Ни Create, ни GetByHash, ни Revoke
+// не меняются ни строкой — они уже написаны против интерфейса, не против *pgxpool.Pool.
+func (r *PostgresRefreshTokenRepository) WithTx(q db.Querier) RefreshTokenRepository {
+	return &PostgresRefreshTokenRepository{q: q}
 }
 
 func (r *PostgresRefreshTokenRepository) Create(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (*RefreshToken, error) {
@@ -24,7 +31,7 @@ func (r *PostgresRefreshTokenRepository) Create(ctx context.Context, userID int6
 		RETURNING id, user_id, token_hash, expires_at, created_at, revoked_at
 	`
 	var t RefreshToken
-	err := r.pool.QueryRow(ctx, query, userID, tokenHash, expiresAt).Scan(
+	err := r.q.QueryRow(ctx, query, userID, tokenHash, expiresAt).Scan(
 		&t.ID, &t.UserID, &t.TokenHash, &t.ExpiresAt, &t.CreatedAt, &t.RevokedAt,
 	)
 	if err != nil {
@@ -40,7 +47,7 @@ func (r *PostgresRefreshTokenRepository) GetByHash(ctx context.Context, tokenHas
 		WHERE token_hash = $1
 	`
 	var t RefreshToken
-	err := r.pool.QueryRow(ctx, query, tokenHash).Scan(
+	err := r.q.QueryRow(ctx, query, tokenHash).Scan(
 		&t.ID, &t.UserID, &t.TokenHash, &t.ExpiresAt, &t.CreatedAt, &t.RevokedAt,
 	)
 	if err != nil {
@@ -54,6 +61,6 @@ func (r *PostgresRefreshTokenRepository) GetByHash(ctx context.Context, tokenHas
 
 func (r *PostgresRefreshTokenRepository) Revoke(ctx context.Context, id int64) error {
 	const query = `UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1`
-	_, err := r.pool.Exec(ctx, query, id)
+	_, err := r.q.Exec(ctx, query, id)
 	return err
 }
