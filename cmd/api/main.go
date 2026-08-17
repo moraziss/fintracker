@@ -32,14 +32,20 @@ func main() {
 	authService := auth.NewService(userRepo, tokenIssuer, refreshTokenRepo)
 	authHandler := auth.NewHandler(authService)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/register", userHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
-	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
+	publicMux := http.NewServeMux()
+	publicMux.HandleFunc("POST /auth/register", userHandler.Register)
+	publicMux.HandleFunc("POST /auth/login", authHandler.Login)
+	publicMux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
+
+	protectedMux := http.NewServeMux()
+	// с Недели 3 сюда просто добавляются новые маршруты — уже под защитой
+
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/auth/", publicMux)
+	rootMux.Handle("/", auth.RequireAuth(tokenIssuer)(protectedMux))
 
 	log.Println("listening on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("failed to start HTTP server: %v", err)
+	if err := http.ListenAndServe(":8080", rootMux); err != nil {
+		log.Fatal(err)
 	}
-
 }
