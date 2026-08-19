@@ -56,6 +56,8 @@ func main() {
 
 	protectedMux := http.NewServeMux()
 	protectedMux.HandleFunc("POST /transactions", transactionHandler.Create)
+	protectedMux.HandleFunc("GET /transactions", transactionHandler.List)
+	protectedMux.HandleFunc("DELETE /transactions/{id}", transactionHandler.Delete)
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/auth/", publicMux)

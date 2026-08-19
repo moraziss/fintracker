@@ -1,6 +1,8 @@
 package transaction
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -16,4 +18,36 @@ type CreateRequest struct {
 	Amount      decimal.Decimal `json:"amount"`
 	Description *string         `json:"description"`
 	OccurredAt  *time.Time      `json:"occurred_at"`
+}
+
+type Cursor struct {
+	OccurredAt time.Time `json:"o"`
+	ID         int64     `json:"i"`
+}
+
+func EncodeCursor(c Cursor) string {
+	b, _ := json.Marshal(c)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func DecodeCursor(s string) (*Cursor, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	var c Cursor
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+type ListFilter struct {
+	AccountID  *int64
+	CategoryID *int64
+	Type       *Type
+	From       *time.Time
+	To         *time.Time
+	Cursor     *Cursor
+	Limit      int
 }

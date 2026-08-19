@@ -10,6 +10,11 @@ import (
 	"github.com/morazss/fintracker/internal/db"
 )
 
+const (
+	defaultListLimit = 20
+	maxListLimit     = 100
+)
+
 type Service struct {
 	transactions Repository
 	accounts     account.Repository
@@ -61,4 +66,33 @@ func (s *Service) Create(ctx context.Context, userID int64, req CreateRequest) (
 	}
 
 	return created, nil
+}
+
+func (s *Service) List(ctx context.Context, userID int64, f ListFilter) ([]*Transaction, *Cursor, error) {
+	if f.Limit <= 0 || f.Limit > maxListLimit {
+		f.Limit = defaultListLimit
+	}
+
+	// запрашиваем на одну строку больше, чтобы понять, есть ли следующая
+	// страница, без отдельного COUNT-запроса
+	fetch := f
+	fetch.Limit = f.Limit + 1
+
+	items, err := s.transactions.List(ctx, userID, fetch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var next *Cursor
+	if len(items) > f.Limit {
+		last := items[f.Limit-1]
+		next = &Cursor{OccurredAt: last.OccurredAt, ID: last.ID}
+		items = items[:f.Limit]
+	}
+
+	return items, next, nil
+}
+
+func (s *Service) Delete(ctx context.Context, id, userID int64) error {
+	return s.transactions.SoftDelete(ctx, id, userID)
 }

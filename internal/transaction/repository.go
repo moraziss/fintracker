@@ -8,5 +8,7 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, t *Transaction) (*Transaction, error)
+	List(ctx context.Context, userID int64, f ListFilter) ([]*Transaction, error)
+	SoftDelete(ctx context.Context, id, userID int64) error
 	WithTx(q db.Querier) Repository
 }
