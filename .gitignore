@@ -14,8 +14,6 @@ coverage.*
 # Go workspace (если не используешь — не мешает)
 go.work
 go.work.sum
-go.mod
-go.sum
 test-api.http
 
 # Секреты/конфиги
