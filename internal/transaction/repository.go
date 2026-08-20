@@ -11,4 +11,6 @@ type Repository interface {
 	List(ctx context.Context, userID int64, f ListFilter) ([]*Transaction, error)
 	SoftDelete(ctx context.Context, id, userID int64) error
 	WithTx(q db.Querier) Repository
+	GetForUpdate(ctx context.Context, id, userID int64) (*Transaction, error)
+	Update(ctx context.Context, t *Transaction) (*Transaction, error)
 }

@@ -96,3 +96,56 @@ func (s *Service) List(ctx context.Context, userID int64, f ListFilter) ([]*Tran
 func (s *Service) Delete(ctx context.Context, id, userID int64) error {
 	return s.transactions.SoftDelete(ctx, id, userID)
 }
+
+func (s *Service) Update(ctx context.Context, id, userID int64, req UpdateRequest) (*Transaction, error) {
+	if req.Amount.Sign() <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	newDelta := req.Amount
+	if req.Type == string(TypeExpense) {
+		newDelta = newDelta.Neg()
+	}
+
+	occurredAt := time.Now()
+	if req.OccurredAt != nil {
+		occurredAt = *req.OccurredAt
+	}
+
+	var updated *Transaction
+	err := pgx.BeginFunc(ctx, s.beginner, func(tx pgx.Tx) error {
+		transactionsTx := s.transactions.WithTx(tx)
+
+		existing, err := transactionsTx.GetForUpdate(ctx, id, userID)
+		if err != nil {
+			return err
+		}
+
+		oldDelta := existing.Amount
+		if existing.Type == TypeExpense {
+			oldDelta = oldDelta.Neg()
+		}
+
+		net := newDelta.Sub(oldDelta)
+		if !net.IsZero() {
+			accountsTx := s.accounts.WithTx(tx)
+			if err := accountsTx.ApplyBalanceDelta(ctx, existing.AccountID, userID, net); err != nil {
+				return err
+			}
+		}
+
+		existing.CategoryID = req.CategoryID
+		existing.Type = Type(req.Type)
+		existing.Amount = req.Amount
+		existing.Description = req.Description
+		existing.OccurredAt = occurredAt
+
+		updated, err = transactionsTx.Update(ctx, existing)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return updated, nil
+}

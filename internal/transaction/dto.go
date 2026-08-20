@@ -51,3 +51,11 @@ type ListFilter struct {
 	Cursor     *Cursor
 	Limit      int
 }
+
+type UpdateRequest struct {
+	CategoryID  *int64          `json:"category_id"`
+	Type        string          `json:"type" validate:"required,oneof=income expense"`
+	Amount      decimal.Decimal `json:"amount"`
+	Description *string         `json:"description"`
+	OccurredAt  *time.Time      `json:"occurred_at"`
+}

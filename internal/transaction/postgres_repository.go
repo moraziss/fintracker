@@ -2,9 +2,11 @@ package transaction
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/morazss/fintracker/internal/db"
 )
 
@@ -117,4 +119,48 @@ func (r *PostgresRepository) SoftDelete(ctx context.Context, id, userID int64) e
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *PostgresRepository) GetForUpdate(ctx context.Context, id, userID int64) (*Transaction, error) {
+	const query = `
+		SELECT t.id, t.account_id, t.category_id, t.type, t.amount, t.description, t.occurred_at, t.created_at, t.deleted_at
+		FROM transactions t
+		JOIN accounts a ON a.id = t.account_id
+		WHERE t.id = $1 AND a.user_id = $2 AND t.deleted_at IS NULL
+		FOR UPDATE OF t
+	`
+	var t Transaction
+	err := r.q.QueryRow(ctx, query, id, userID).Scan(
+		&t.ID, &t.AccountID, &t.CategoryID, &t.Type,
+		&t.Amount, &t.Description, &t.OccurredAt,
+		&t.CreatedAt, &t.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *PostgresRepository) Update(ctx context.Context, t *Transaction) (*Transaction, error) {
+	const query = `
+		UPDATE transactions
+		SET category_id = $1, type = $2, amount = $3, description = $4, occurred_at = $5
+		WHERE id = $6
+		RETURNING id, account_id, category_id, type, amount, description, occurred_at, created_at, deleted_at
+	`
+	var updated Transaction
+	err := r.q.QueryRow(ctx, query,
+		t.CategoryID, t.Type, t.Amount, t.Description, t.OccurredAt, t.ID,
+	).Scan(
+		&updated.ID, &updated.AccountID, &updated.CategoryID, &updated.Type,
+		&updated.Amount, &updated.Description, &updated.OccurredAt,
+		&updated.CreatedAt, &updated.DeletedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
