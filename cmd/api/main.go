@@ -53,7 +53,7 @@ func main() {
 	analyticsRepo := analytics.NewPostgresRepository(pool)
 	analyticsService := analytics.NewService(analyticsRepo)
 	analyticsHandler := analytics.NewHandler(analyticsService)
-	
+
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("POST /auth/register", userHandler.Register)
 	publicMux.HandleFunc("POST /auth/login", authHandler.Login)
@@ -65,6 +65,8 @@ func main() {
 	protectedMux.HandleFunc("DELETE /transactions/{id}", transactionHandler.Delete)
 	protectedMux.HandleFunc("PUT /transactions/{id}", transactionHandler.Update)
 	protectedMux.HandleFunc("GET /analytics/summary", analyticsHandler.Summary)
+	protectedMux.HandleFunc("GET /analytics/by-category", analyticsHandler.ByCategory)
+	protectedMux.HandleFunc("GET /analytics/trend", analyticsHandler.Trend)
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/auth/", publicMux)

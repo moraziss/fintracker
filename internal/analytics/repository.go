@@ -8,6 +8,8 @@ import (
 
 type Repository interface {
 	Summary(ctx context.Context, userID int64, f Filter) (*Summary, error)
+	ByCategory(ctx context.Context, userID int64, f Filter) ([]*CategoryTotal, error)
+	Trend(ctx context.Context, userID int64, f Filter) ([]*DailyTrend, error)
 }
 
 type PostgresRepository struct {
