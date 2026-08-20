@@ -9,6 +9,7 @@ import (
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/morazss/fintracker/internal/analytics"
 
 	"github.com/morazss/fintracker/internal/account"
 	"github.com/morazss/fintracker/internal/auth"
@@ -49,6 +50,10 @@ func main() {
 	transactionService := transaction.NewService(transactionRepo, accountRepo, pool)
 	transactionHandler := transaction.NewHandler(transactionService)
 
+	analyticsRepo := analytics.NewPostgresRepository(pool)
+	analyticsService := analytics.NewService(analyticsRepo)
+	analyticsHandler := analytics.NewHandler(analyticsService)
+	
 	publicMux := http.NewServeMux()
 	publicMux.HandleFunc("POST /auth/register", userHandler.Register)
 	publicMux.HandleFunc("POST /auth/login", authHandler.Login)
@@ -59,6 +64,7 @@ func main() {
 	protectedMux.HandleFunc("GET /transactions", transactionHandler.List)
 	protectedMux.HandleFunc("DELETE /transactions/{id}", transactionHandler.Delete)
 	protectedMux.HandleFunc("PUT /transactions/{id}", transactionHandler.Update)
+	protectedMux.HandleFunc("GET /analytics/summary", analyticsHandler.Summary)
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/auth/", publicMux)
