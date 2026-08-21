@@ -14,22 +14,41 @@ import (
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/morazss/fintracker/internal/analytics"
+	"go.uber.org/zap"
 
 	"github.com/morazss/fintracker/internal/account"
+	"github.com/morazss/fintracker/internal/analytics"
 	"github.com/morazss/fintracker/internal/auth"
+	"github.com/morazss/fintracker/internal/middleware"
 	"github.com/morazss/fintracker/internal/transaction"
 	"github.com/morazss/fintracker/internal/user"
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Println(err)
-		os.Exit(1)
+	logger, err := newLogger()
+	if err != nil {
+		// единственное место в проекте, где логгер ещё не построен — fallback на stdlib log
+		log.Fatalf("failed to initialize logger: %v", err)
 	}
+
+	exitCode := 0
+	if err := run(logger); err != nil {
+		logger.Error("fatal error", zap.Error(err))
+		exitCode = 1
+	}
+
+	_ = logger.Sync()
+	os.Exit(exitCode)
 }
 
-func run() error {
+func newLogger() (*zap.Logger, error) {
+	if os.Getenv("APP_ENV") == "production" {
+		return zap.NewProduction()
+	}
+	return zap.NewDevelopment()
+}
+
+func run(logger *zap.Logger) error {
 	ctx := context.Background()
 
 	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
@@ -86,12 +105,12 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: rootMux,
+		Handler: middleware.RequestLogger(logger)(rootMux),
 	}
 
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Println("listening on :8080")
+		logger.Info("starting server", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -105,7 +124,7 @@ func run() error {
 	case err := <-serverErr:
 		return fmt.Errorf("server error: %w", err)
 	case <-notifyCtx.Done():
-		log.Println("shutdown signal received")
+		logger.Info("shutdown signal received")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -115,6 +134,6 @@ func run() error {
 		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
 
-	log.Println("server stopped gracefully")
+	logger.Info("server stopped gracefully")
 	return nil
 }
