@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/morazss/fintracker/internal/testutil"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -56,46 +55,6 @@ func (m *mockRefreshTokenRepository) Revoke(ctx context.Context, id int64) error
 
 func (m *mockRefreshTokenRepository) WithTx(q db.Querier) auth.RefreshTokenRepository {
 	return m // моку неважно, в транзакции он или нет — саму транзакционность Postgres здесь не проверяем
-}
-
-// fakeTx реализует pgx.Tx через embedding nil-интерфейса — см. пояснение выше.
-type fakeTx struct {
-	pgx.Tx
-	closed     bool
-	committed  bool
-	rolledBack bool
-}
-
-func (f *fakeTx) Commit(ctx context.Context) error {
-	if f.closed {
-		return pgx.ErrTxClosed
-	}
-	f.closed = true
-	f.committed = true
-	return nil
-}
-
-func (f *fakeTx) Rollback(ctx context.Context) error {
-	if f.closed {
-		return pgx.ErrTxClosed
-	}
-	f.closed = true
-	f.rolledBack = true
-	return nil
-}
-
-type mockBeginner struct {
-	tx     *fakeTx
-	err    error
-	called bool
-}
-
-func (m *mockBeginner) Begin(ctx context.Context) (pgx.Tx, error) {
-	m.called = true
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.tx, nil
 }
 
 // --- Login ---
