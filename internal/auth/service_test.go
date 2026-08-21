@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/morazss/fintracker/internal/testutil"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
@@ -233,17 +234,17 @@ func TestService_Refresh(t *testing.T) {
 				},
 			}
 
-			tx := &fakeTx{}
-			beginner := &mockBeginner{tx: tx, err: tt.beginErr}
+			tx := &testutil.FakeTx{}
+			beginner := &testutil.MockBeginner{Tx: tx, Err: tt.beginErr}
 
 			svc := auth.NewService(nil, testTokenIssuer, repo, beginner) // users не нужен — Refresh его не трогает
 
 			got, err := svc.Refresh(context.Background(), "some-raw-refresh-token")
 
-			require.Equal(t, tt.wantBeginCalled, beginner.called, "Begin вызван не так, как ожидалось")
+			require.Equal(t, tt.wantBeginCalled, beginner.Called, "Begin вызван не так, как ожидалось")
 			require.Equal(t, tt.wantRevokeCalled, repo.revokeCalled, "Revoke вызван не так, как ожидалось")
-			require.Equal(t, tt.wantCommit, tx.committed, "Commit вызван не так, как ожидалось")
-			require.Equal(t, tt.wantRollback, tx.rolledBack, "Rollback вызван не так, как ожидалось")
+			require.Equal(t, tt.wantCommit, tx.Committed, "Commit вызван не так, как ожидалось")
+			require.Equal(t, tt.wantRollback, tx.RolledBack, "Rollback вызван не так, как ожидалось")
 
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
