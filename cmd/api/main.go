@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
 	"github.com/jackc/pgx/v5"
@@ -18,11 +23,18 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx := context.Background()
 
 	poolConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatalf("invalid DATABASE_URL: %v", err)
+		return fmt.Errorf("invalid DATABASE_URL: %w", err)
 	}
 	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		pgxdecimal.Register(conn.TypeMap())
@@ -31,7 +43,7 @@ func main() {
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		log.Fatalf("unable to create connection pool: %v", err)
+		return fmt.Errorf("unable to create connection pool: %w", err)
 	}
 	defer pool.Close()
 
@@ -72,8 +84,37 @@ func main() {
 	rootMux.Handle("/auth/", publicMux)
 	rootMux.Handle("/", auth.RequireAuth(tokenIssuer)(protectedMux))
 
-	log.Println("listening on :8080")
-	if err := http.ListenAndServe(":8080", rootMux); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: rootMux,
 	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Println("listening on :8080")
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	notifyCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErr:
+		return fmt.Errorf("server error: %w", err)
+	case <-notifyCtx.Done():
+		log.Println("shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("graceful shutdown failed: %w", err)
+	}
+
+	log.Println("server stopped gracefully")
+	return nil
 }
