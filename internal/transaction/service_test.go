@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -40,6 +41,9 @@ type mockTransactionRepository struct {
 
 	createCalled bool
 	updateCalled bool
+
+	receivedListFilter transaction.ListFilter
+	softDeleteCalled   bool
 }
 
 func (m *mockTransactionRepository) Create(ctx context.Context, t *transaction.Transaction) (*transaction.Transaction, error) {
@@ -47,9 +51,11 @@ func (m *mockTransactionRepository) Create(ctx context.Context, t *transaction.T
 	return m.CreateFunc(ctx, t)
 }
 func (m *mockTransactionRepository) List(ctx context.Context, userID int64, f transaction.ListFilter) ([]*transaction.Transaction, error) {
+	m.receivedListFilter = f
 	return m.ListFunc(ctx, userID, f)
 }
 func (m *mockTransactionRepository) SoftDelete(ctx context.Context, id, userID int64) error {
+	m.softDeleteCalled = true
 	return m.SoftDeleteFunc(ctx, id, userID)
 }
 func (m *mockTransactionRepository) WithTx(q db.Querier) transaction.Repository {
@@ -315,6 +321,142 @@ func TestService_Update(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, got)
+		})
+	}
+}
+
+func TestService_List(t *testing.T) {
+	t1 := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 8, 1, 10, 0, 1, 0, time.UTC)
+	t3 := time.Date(2026, 8, 1, 10, 0, 2, 0, time.UTC)
+	t4 := time.Date(2026, 8, 1, 10, 0, 3, 0, time.UTC)
+
+	fourItems := []*transaction.Transaction{
+		{ID: 101, OccurredAt: t1},
+		{ID: 102, OccurredAt: t2},
+		{ID: 103, OccurredAt: t3},
+		{ID: 104, OccurredAt: t4},
+	}
+	repoErrSentinel := errors.New("db: query failed")
+
+	tests := []struct {
+		name           string
+		filter         transaction.ListFilter
+		repoItems      []*transaction.Transaction
+		repoErr        error
+		wantFetchLimit int
+		wantItemsLen   int
+		wantCursor     *transaction.Cursor
+		wantErr        error
+	}{
+		{
+			name:           "limit не задан — дефолт 20, запрашиваем 21",
+			filter:         transaction.ListFilter{Limit: 0},
+			repoItems:      fourItems, // 4 < 21 — следующей страницы нет
+			wantFetchLimit: 21,
+			wantItemsLen:   4,
+			wantCursor:     nil,
+		},
+		{
+			name:           "limit превышает максимум — сброс к дефолту, НЕ clamp до 100",
+			filter:         transaction.ListFilter{Limit: 500},
+			repoItems:      fourItems,
+			wantFetchLimit: 21, // не 101
+			wantItemsLen:   4,
+			wantCursor:     nil,
+		},
+		{
+			name:           "отрицательный limit — тоже сброс к дефолту",
+			filter:         transaction.ListFilter{Limit: -5},
+			repoItems:      fourItems,
+			wantFetchLimit: 21,
+			wantItemsLen:   4,
+			wantCursor:     nil,
+		},
+		{
+			name:           "ровно limit элементов — следующей страницы нет",
+			filter:         transaction.ListFilter{Limit: 4},
+			repoItems:      fourItems, // len == f.Limit, не больше
+			wantFetchLimit: 5,
+			wantItemsLen:   4,
+			wantCursor:     nil,
+		},
+		{
+			name:           "limit+1 элементов — есть следующая страница",
+			filter:         transaction.ListFilter{Limit: 3},
+			repoItems:      fourItems, // len(4) > f.Limit(3)
+			wantFetchLimit: 4,
+			wantItemsLen:   3,
+			wantCursor:     &transaction.Cursor{OccurredAt: t3, ID: 103}, // items[f.Limit-1] = items[2]
+		},
+		{
+			name:    "repository error",
+			filter:  transaction.ListFilter{Limit: 3},
+			repoErr: repoErrSentinel,
+			wantErr: repoErrSentinel,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transactions := &mockTransactionRepository{
+				ListFunc: func(ctx context.Context, userID int64, f transaction.ListFilter) ([]*transaction.Transaction, error) {
+					if tt.repoErr != nil {
+						return nil, tt.repoErr
+					}
+					return tt.repoItems, nil
+				},
+			}
+			svc := transaction.NewService(transactions, nil, nil) // accounts/beginner не нужны — List их не трогает
+
+			items, cursor, err := svc.List(context.Background(), 7, tt.filter)
+
+			require.Equal(t, tt.wantFetchLimit, transactions.receivedListFilter.Limit,
+				"в репозиторий должен был уйти limit+1")
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				require.Nil(t, items)
+				require.Nil(t, cursor)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, items, tt.wantItemsLen)
+			require.Equal(t, tt.wantCursor, cursor)
+		})
+	}
+}
+
+func TestService_Delete(t *testing.T) {
+	repoErrSentinel := errors.New("db: not found or not owned")
+
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{name: "success"},
+		{name: "repository error", repoErr: repoErrSentinel, wantErr: repoErrSentinel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transactions := &mockTransactionRepository{
+				SoftDeleteFunc: func(ctx context.Context, id, userID int64) error {
+					return tt.repoErr
+				},
+			}
+			svc := transaction.NewService(transactions, nil, nil)
+
+			err := svc.Delete(context.Background(), 1, 7)
+
+			require.True(t, transactions.softDeleteCalled)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }
