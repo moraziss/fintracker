@@ -1,4 +1,4 @@
-module github.com/morazss/fintracker
+module github.com/moraziss/fintracker
 
 go 1.25.0
 

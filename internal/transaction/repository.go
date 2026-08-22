@@ -3,7 +3,7 @@ package transaction
 import (
 	"context"
 
-	"github.com/morazss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/db"
 )
 
 type Repository interface {

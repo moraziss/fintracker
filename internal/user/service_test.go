@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/morazss/fintracker/internal/user"
+	"github.com/moraziss/fintracker/internal/user"
 )
 
 type mockRepository struct {

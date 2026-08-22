@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/morazss/fintracker/internal/account"
-	"github.com/morazss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/account"
+	"github.com/moraziss/fintracker/internal/db"
 )
 
 const (

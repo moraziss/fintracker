@@ -5,7 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/morazss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/db"
 )
 
 type PostgresRepository struct {

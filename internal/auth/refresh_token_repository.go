@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/morazss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/db"
 )
 
 type RefreshTokenRepository interface {

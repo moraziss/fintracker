@@ -5,7 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/morazss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/db"
 )
 
 // Repository — сознательно минимальный: единственный метод, который реально

@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/morazss/fintracker/internal/testutil"
+	"github.com/moraziss/fintracker/internal/testutil"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/morazss/fintracker/internal/auth"
-	"github.com/morazss/fintracker/internal/db"
-	"github.com/morazss/fintracker/internal/user"
+	"github.com/moraziss/fintracker/internal/auth"
+	"github.com/moraziss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/user"
 )
 
 var testTokenIssuer = auth.NewTokenIssuer([]byte("test-secret"))

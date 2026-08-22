@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/morazss/fintracker/internal/db"
-	"github.com/morazss/fintracker/internal/user"
+	"github.com/moraziss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/user"
 )
 
 type Service struct {

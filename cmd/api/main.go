@@ -16,12 +16,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"github.com/morazss/fintracker/internal/account"
-	"github.com/morazss/fintracker/internal/analytics"
-	"github.com/morazss/fintracker/internal/auth"
-	"github.com/morazss/fintracker/internal/middleware"
-	"github.com/morazss/fintracker/internal/transaction"
-	"github.com/morazss/fintracker/internal/user"
+	"github.com/moraziss/fintracker/internal/account"
+	"github.com/moraziss/fintracker/internal/analytics"
+	"github.com/moraziss/fintracker/internal/auth"
+	"github.com/moraziss/fintracker/internal/middleware"
+	"github.com/moraziss/fintracker/internal/transaction"
+	"github.com/moraziss/fintracker/internal/user"
 )
 
 func main() {

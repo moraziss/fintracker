@@ -9,10 +9,10 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
-	"github.com/morazss/fintracker/internal/account"
-	"github.com/morazss/fintracker/internal/db"
-	"github.com/morazss/fintracker/internal/testutil"
-	"github.com/morazss/fintracker/internal/transaction"
+	"github.com/moraziss/fintracker/internal/account"
+	"github.com/moraziss/fintracker/internal/db"
+	"github.com/moraziss/fintracker/internal/testutil"
+	"github.com/moraziss/fintracker/internal/transaction"
 )
 
 type mockAccountRepository struct {

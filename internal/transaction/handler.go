@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/morazss/fintracker/internal/account"
-	"github.com/morazss/fintracker/internal/auth"
+	"github.com/moraziss/fintracker/internal/account"
+	"github.com/moraziss/fintracker/internal/auth"
 )
 
 type Handler struct {

@@ -8,7 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
-	"github.com/morazss/fintracker/internal/analytics"
+	"github.com/moraziss/fintracker/internal/analytics"
 )
 
 type mockRepository struct {
